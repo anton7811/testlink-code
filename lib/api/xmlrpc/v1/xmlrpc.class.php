@@ -6891,10 +6891,11 @@ protected function createAttachmentTempFile()
     {
       // Get test projects
       $idSet = $this->args[self::$testCaseIDParamName];
+
       foreach( $idSet as $key => $val ) 
       {
         // indexed by same value than keywords
-        $tprojectSet[$items[$key]] = $this->tcaseMgr->get_testproject($val);
+        $tprojectSet[$items[$key]] = $this->tcaseMgr->get_testproject($items[$key]);
 
         // Do authorization checks, all or nothing
         // userHasRight() on failure set error to return to caller
