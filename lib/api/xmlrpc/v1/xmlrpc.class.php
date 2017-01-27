@@ -6895,13 +6895,13 @@ protected function createAttachmentTempFile()
       foreach( $idSet as $key => $val ) 
       {
         // indexed by same value than keywords
-        $tprojectSet[$items[$key]] = $this->tcaseMgr->get_testproject($items[$key]);
+        $tprojectSet[$items[$key]] = $this->tcaseMgr->get_testproject($val);
 
         // Do authorization checks, all or nothing
         // userHasRight() on failure set error to return to caller
         $status_ok = $this->userHasRight("mgt_modify_tc",
                                          self::CHECK_PUBLIC_PRIVATE_ATTR,
-                                         array(self::$testProjectIDParamName => $tprojectSet[$val])
+                                         array(self::$testProjectIDParamName => $tprojectSet[$items[$key]])
                                         );
         if(!$status_ok)
         {
