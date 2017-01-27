@@ -6096,11 +6096,12 @@ protected function createAttachmentTempFile()
     //
     // Check that configuration allow changes on Test Case
     // Check that new test case name do not collide with existent one
-
+    
     // translate args key to column name
     $updKeys = array("summary" => null,"preconditions" => null,"importance" => null,
                      "executiontype" => "execution_type",
-                     "status" => null, "estimatedexecduration" => "estimated_exec_duration");
+                     "status" => null, "estimatedexecduration" => "estimated_exec_duration",
+                     "order" => null);
 
     $resultInfo = array();
     $operation=__FUNCTION__;
@@ -6173,7 +6174,23 @@ protected function createAttachmentTempFile()
           }
         }
       }
-      
+
+      if($status_ok)
+      {
+        // order has to be updated in the same table as name.
+        // so it cannot be updated with updateSimpleFields
+        if(isset($this->args[self::$orderParamName]))
+        {
+          $ret = $this->tcaseMgr->update_order($tcaseID,$this->args[self::$orderParamName]);
+          if( !($ret = 0) )
+          {
+            // Store error but don't stop update procces.
+            $this->errors[] = new IXR_Error(constant('TEST_CASE_ORDER_UPDATE_ERROR'),
+                                            $msg_prefix . "Failed to update order."); 
+          }
+        }
+      }
+    
       if($status_ok)
       {
         $fv = null;

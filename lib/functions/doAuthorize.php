@@ -1,14 +1,14 @@
 <?php
 /**
- * TestLink Open Source Project - http://testlink.sourceforge.net/ 
- * This script is distributed under the GNU General Public License 2 or later. 
- * 
+ * TestLink Open Source Project - http://testlink.sourceforge.net/
+ * This script is distributed under the GNU General Public License 2 or later.
+ *
  * This file handles the initial authentication for login and creates all user session variables.
  *
  * @filesource  doAuthorize.php
  * @package     TestLink
  * @author      Chad Rosen, Martin Havlat,Francisco Mancardi
- * @copyright   2003-2015, TestLink community 
+ * @copyright   2003-2015, TestLink community
  * @link        http://www.testlink.org
  *
  *
@@ -19,9 +19,10 @@
 require_once("users.inc.php");
 require_once("roles.inc.php");
 require_once("ldap_api.php");
+require_once("pam_api.php");
 
-/** 
- * authorization function verifies login & password and set user session data 
+/**
+ * authorization function verifies login & password and set user session data
  * return map
  *
  * we need an option to skip existent session block, in order to use
@@ -33,9 +34,9 @@ function doAuthorize(&$db,$login,$pwd,$options=null)
   global $g_tlLogger;
 
   $result = array('status' => tl::ERROR, 'msg' => null);
-  $_SESSION['locale'] = TL_DEFAULT_LOCALE; 
-  
-  $my['options'] = array('doSessionExistsCheck' => true); 
+  $_SESSION['locale'] = TL_DEFAULT_LOCALE;
+
+  $my['options'] = array('doSessionExistsCheck' => true);
   $my['options'] = array_merge($my['options'], (array)$options);
 
   $doLogin = false;
@@ -44,7 +45,7 @@ function doAuthorize(&$db,$login,$pwd,$options=null)
   {
     $user = new tlUser();
     $user->login = $login;
-    $login_exists = ($user->readFromDB($db,tlUser::USER_O_SEARCH_BYLOGIN) >= tl::OK); 
+    $login_exists = ($user->readFromDB($db,tlUser::USER_O_SEARCH_BYLOGIN) >= tl::OK);
 
     if ($login_exists)
     {
@@ -53,12 +54,12 @@ function doAuthorize(&$db,$login,$pwd,$options=null)
       {
         $result = array('status' => tl::ERROR, 'msg' => null);
       }
-      
+
       $doLogin = $password_check->status_ok && $user->isActive;
       if( !$doLogin )
       {
         logAuditEvent(TLS("audit_login_failed",$login,$_SERVER['REMOTE_ADDR']),"LOGIN_FAILED",$user->dbID,"users");
-      } 
+      }
     }
     else
     {
@@ -70,7 +71,7 @@ function doAuthorize(&$db,$login,$pwd,$options=null)
 
         if( $check->status_ok )
         {
-          $user = new tlUser(); 
+          $user = new tlUser();
           $user->login = $login;
           $user->authentication = 'LDAP';
           $user->isActive = true;
@@ -83,11 +84,30 @@ function doAuthorize(&$db,$login,$pwd,$options=null)
           $user->firstName = (is_null($user->firstName) || strlen($user->firstName) == 0) ? $login : $user->firstName;
           $user->lastName = (is_null($user->lastName) || strlen($user->lastName) == 0) ? $login : $user->lastName;
 
+          $doLogin = ($user->writeToDB($db) == tl::OK);
+        }
+      } elseif ($authCfg['pam_automatic_user_creation']) {
+        $user->authentication = 'PAM';  // force for auth_does_password_match
+        $check = auth_does_password_match($user,$pwd);
+
+        if( $check->status_ok )
+        {
+          $user = new tlUser();
+          $user->login = $login;
+          $user->authentication = 'PAM';
+          $user->isActive = true;
+          $user->setPassword($pwd);  // write password on DB anyway
+
+          $user_info = pam_get_user_attributes($login);
+
+          $user->emailAddress = $user_info['email'];
+          $user->firstName = $user_info['firstName'];
+          $user->lastName = $user_info['lastName'];
 
           $doLogin = ($user->writeToDB($db) == tl::OK);
-        }  
-      }  
-    }  
+        }
+      }
+    }
   }
 
   if( $doLogin )
@@ -100,26 +120,26 @@ function doAuthorize(&$db,$login,$pwd,$options=null)
     // Need to do set COOKIE following Mantis model
     $auth_cookie_name = config_get('auth_cookie');
     $expireOnBrowserClose=false;
-    setcookie($auth_cookie_name,$user->getSecurityCookie(),$expireOnBrowserClose,'/');      
+    setcookie($auth_cookie_name,$user->getSecurityCookie(),$expireOnBrowserClose,'/');
 
     // Disallow two sessions within one browser
-    if ($my['options']['doSessionExistsCheck'] && 
+    if ($my['options']['doSessionExistsCheck'] &&
         isset($_SESSION['currentUser']) && !is_null($_SESSION['currentUser']))
     {
-      $result['msg'] = lang_get('login_msg_session_exists1') . 
-                       ' <a style="color:white;" href="logout.php">' . 
+      $result['msg'] = lang_get('login_msg_session_exists1') .
+                       ' <a style="color:white;" href="logout.php">' .
                        lang_get('logout_link') . '</a>' . lang_get('login_msg_session_exists2');
     }
     else
-    { 
+    {
       // Setting user's session information
       $_SESSION['currentUser'] = $user;
       $_SESSION['lastActivity'] = time();
-          
+
       $g_tlLogger->endTransaction();
       $g_tlLogger->startTransaction();
       setUserSession($db,$user->login, $user->dbID,$user->globalRoleID,$user->emailAddress,$user->locale,null);
-          
+
       $result['status'] = tl::OK;
     }
   }
@@ -127,7 +147,7 @@ function doAuthorize(&$db,$login,$pwd,$options=null)
 }
 
 
-/** 
+/**
  * for SSL Cliente Certificate we can not check password but
  * 1. login exists
  * 2. SSL context exist
@@ -142,9 +162,9 @@ function doSSOClientCertificate(&$dbHandler,$apache_mod_ssl_env,$authCfg=null)
   $result = array('status' => tl::ERROR, 'msg' => null);
   if( !isset($apache_mod_ssl_env['SSL_PROTOCOL']) )
   {
-    return $result; 
+    return $result;
   }
-  
+
   // With this we trust SSL is enabled => go ahead with login control
   $authCfg = is_null($authCfg) ? config_get('authentication') : $authCfg;
 
@@ -153,30 +173,30 @@ function doSSOClientCertificate(&$dbHandler,$apache_mod_ssl_env,$authCfg=null)
   {
     $user = new tlUser();
     $user->login = $login;
-    $login_exists = ($user->readFromDB($dbHandler,tlUser::USER_O_SEARCH_BYLOGIN) >= tl::OK); 
+    $login_exists = ($user->readFromDB($dbHandler,tlUser::USER_O_SEARCH_BYLOGIN) >= tl::OK);
     if( $login_exists && $user->isActive)
     {
       // Need to do set COOKIE following Mantis model
       $auth_cookie_name = config_get('auth_cookie');
       $expireOnBrowserClose=false;
-      setcookie($auth_cookie_name,$user->getSecurityCookie(),$expireOnBrowserClose,'/');      
+      setcookie($auth_cookie_name,$user->getSecurityCookie(),$expireOnBrowserClose,'/');
 
       // Disallow two sessions within one browser
       if (isset($_SESSION['currentUser']) && !is_null($_SESSION['currentUser']))
       {
-          $result['msg'] = lang_get('login_msg_session_exists1') . 
-                           ' <a style="color:white;" href="logout.php">' . 
+          $result['msg'] = lang_get('login_msg_session_exists1') .
+                           ' <a style="color:white;" href="logout.php">' .
                          lang_get('logout_link') . '</a>' . lang_get('login_msg_session_exists2');
       }
       else
-      { 
+      {
           // Setting user's session information
           $_SESSION['currentUser'] = $user;
           $_SESSION['lastActivity'] = time();
-          
+
           $g_tlLogger->endTransaction();
           $g_tlLogger->startTransaction();
-          setUserSession($dbHandler,$user->login, $user->dbID,$user->globalRoleID,$user->emailAddress, 
+          setUserSession($dbHandler,$user->login, $user->dbID,$user->globalRoleID,$user->emailAddress,
                    $user->locale,null);
           $result['status'] = tl::OK;
       }
@@ -185,7 +205,7 @@ function doSSOClientCertificate(&$dbHandler,$apache_mod_ssl_env,$authCfg=null)
     {
       logAuditEvent(TLS("audit_login_failed",$login,$_SERVER['REMOTE_ADDR']),"LOGIN_FAILED",
                     $user->dbID,"users");
-    } 
+    }
 
   }
   return $result;
@@ -195,7 +215,7 @@ function doSSOClientCertificate(&$dbHandler,$apache_mod_ssl_env,$authCfg=null)
 
 
 
-/** 
+/**
  * @return array
  *         obj->status_ok = true/false
  *         obj->msg = message to explain what has happened to a human being.
@@ -206,12 +226,13 @@ function auth_does_password_match(&$userObj,$cleartext_password)
   $ret = new stdClass();
   $ret->status_ok = false;
   $ret->msg = sprintf(lang_get('unknown_authentication_method'),$authCfg['method']);
-  
+
   $authMethod = $userObj->authentication;
   switch($userObj->authentication)
   {
     case 'DB':
     case 'LDAP':
+    case 'PAM':
     break;
 
     default:
@@ -229,12 +250,18 @@ function auth_does_password_match(&$userObj,$cleartext_password)
       $msg[ERROR_LDAP_USER_NOT_FOUND] = lang_get('error_ldap_user_not_found');
       $msg[ERROR_LDAP_BIND_FAILED] = lang_get('error_ldap_bind_failed');
       $msg[ERROR_LDAP_START_TLS_FAILED] = lang_get('error_ldap_start_tls_failed');
-      
+
       $xx = ldap_authenticate($userObj->login, $cleartext_password);
       $ret->status_ok = $xx->status_ok;
-      $ret->msg = $xx->status_ok ? 'ok' : $msg[$xx->status_code]; 
+      $ret->msg = $xx->status_ok ? 'ok' : $msg[$xx->status_code];
     break;
-    
+
+    case 'PAM':
+      $xx = pam_authenticate($userObj->login, $cleartext_password);
+      $ret->status_ok = $xx->status_ok;
+      $ret->msg = $xx->status_verbose;
+    break;
+
     case 'MD5':
     case 'DB':
     default:
