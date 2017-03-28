@@ -18,11 +18,8 @@
  *
  * @filesource  config.inc.php
  * @package     TestLink
- * @copyright   2005-2015, TestLink community
+ * @copyright   2005-2017, TestLink community
  * @link        http://www.testlink.org
- *
- * @internal revisions
- * @since 1.9.13
  *
  *
  **/
@@ -82,7 +79,10 @@ require_once(TL_ABS_PATH . 'cfg' . DIRECTORY_SEPARATOR . 'const.inc.php');
 /** @var string used to have (when needed) a possibility to identify different TL instances
     @since 1.9.4 used on mail subject when mail logger is used
  */
-$tlCfg->instance_id = 'Main TestLink Instance';
+$tlCfg->instance_name = 'Main TestLink Instance';
+
+// do not use blanks or special characters, use a short string
+$tlCfg->instance_id = 'TLM';
 
 
 /**
@@ -318,10 +318,7 @@ $g_SMTPAutoTLS = false;
  *  'LDAP' => use password from LDAP Server
  */
 $tlCfg->authentication['domain'] = array('DB' => array('description' => 'DB', 'allowPasswordManagement' => true) ,
-										 'LDAP' => array('description' => 'LDAP', 'allowPasswordManagement' => false) );
-
-
-// $tlCfg->authentication['domain'] = array('DB','LDAP')
+                     'LDAP' => array('description' => 'LDAP', 'allowPasswordManagement' => false) );
 
 /* Default Authentication method */
 $tlCfg->authentication['method'] = 'DB';
@@ -333,7 +330,7 @@ $tlCfg->authentication['method'] = 'DB';
 // null => only check password IS NOT EMPTY
 // 
 // $tlCfg->passwordChecks = array('minlen' => 8,'maxlen' => 20,'number' => true,'letter' => true,
-//	                              'capital' => true, 'symbol' => true);
+//                                'capital' => true, 'symbol' => true);
 $tlCfg->passwordChecks = null;
 
 // Applies ONLY to the HTML input.
@@ -341,14 +338,30 @@ $tlCfg->passwordChecks = null;
 $tlCfg->loginPagePasswordMaxLenght = 40;
 
 /**
+ * Standard logout url, used also when SSO is used and hint to skip SSO is used.
+ * '' => use standard TestLink page
+ */
+$tlCfg->logoutUrl = '';
+
+
+/**
  * Single Sign On authentication
- * This will be used with $tlCfg->authentication['method'] <<= INCOMPLETE COMMENT
  *
- * This works with apache webserver
+ * SSO_method: CLIENT_CERTIFICATE, tested with Apache Webserver
+ * SSP_method: WEBSERVER_VAR, tested with Apache and Shibboleth Service Provider.
  */
 $tlCfg->authentication['SSO_enabled'] = false; 
-$tlCfg->authentication['SSO_method'] = 'CLIENT_CERTIFICATE';
-$tlCfg->authentication['SSO_uid_field'] = 'SSL_CLIENT_S_DN_Email';
+$tlCfg->authentication['SSO_logout_destination'] = 'YOUR LOGOUT DESTINATION';
+
+// Tested with Apache Webserver
+//$tlCfg->authentication['SSO_method'] = 'CLIENT_CERTIFICATE';
+//$tlCfg->authentication['SSO_uid_field'] = 'SSL_CLIENT_S_DN_Email';
+
+// Tested with Apache and Shibboleth Service Provider 
+//$tlCfg->authentication['SSO_method'] = 'WEBSERVER_VAR';
+//$tlCfg->authentication['SSO_uid_field'] = 'REMOTE_USER';
+//$tlCfg->authentication['SSO_user_target_dbfield'] = 'email';
+
 
 
 
@@ -378,6 +391,11 @@ $tlCfg->authentication['ldap'][1]['ldap_tls'] = false; // true -> use tls
 $tlCfg->authentication['ldap'][1]['ldap_organization'] = ''; // e.g. '(organizationname=*Traffic)'
 $tlCfg->authentication['ldap'][1]['ldap_uid_field'] = 'uid'; // Use 'sAMAccountName' for Active Directory
 
+// Configure following fields in custom_config.inc.php according your configuration
+$tlCfg->authentication['ldap'][1]['ldap_email_field'] = 'mail';
+$tlCfg->authentication['ldap'][1]['ldap_firstname_field'] = 'givenname';
+$tlCfg->authentication['ldap'][1]['ldap_surname_field'] = 'sn';
+
 
 // Follows Mantisbt idea.
 // True if user does not exist on DB, but can be get from LDAP, 
@@ -387,15 +405,6 @@ $tlCfg->authentication['ldap'][1]['ldap_uid_field'] = 'uid'; // Use 'sAMAccountN
 // name
 // surname
 $tlCfg->authentication['ldap_automatic_user_creation'] = false;
-
-// Configure following fields in custom_config.inc.php according your configuration
-// IMPORTANT NOTICE
-// Same for all LDAP Servers if you are using MULTIPLE LDAP Servers configuration 
-$tlCfg->authentication['ldap_email_field'] = 'mail';
-$tlCfg->authentication['ldap_firstname_field'] = 'givenname';
-$tlCfg->authentication['ldap_surname_field'] = 'sn';
-
-
 
 
 /** Enable/disable Users to create accounts on login page */
@@ -462,6 +471,8 @@ $tlCfg->temp_dir = TL_ABS_PATH . 'gui' . DIRECTORY_SEPARATOR . 'templates_c' . D
 $tlCfg->logo_login = 'tl-logo-transparent-25.png';
 $tlCfg->logo_navbar = 'tl-logo-transparent-12.5.png';
 
+/** Height of the navbar always displayed  */
+$tlCfg->navbar_height = 70;
 
 /** Login page could show an informational text */
 $tlCfg->login_info = ''; // Empty by default
@@ -1692,8 +1703,14 @@ if ( file_exists( TL_ABS_PATH . 'custom_config.inc.php' ) )
 
 if( !defined('TL_JQUERY') )
 {
-    define('TL_JQUERY','jquery-2.2.4.min.js' );
+  define('TL_JQUERY','jquery-2.2.4.min.js' );
 }
+
+if( !defined('TL_DATATABLES_DIR') )
+{
+  define('TL_DATATABLES_DIR','DataTables-1.10.4' );
+}
+
 
 /** root of testlink directory location seen through the web server */
 /*  20070106 - franciscom - this statement it's not 100% right
@@ -1761,7 +1778,6 @@ define('TL_THEME_IMG_DIR', $tlCfg->theme_dir . 'images/');
 define('TL_THEME_CSS_DIR', $tlCfg->theme_dir . 'css/');
 define('TL_TESTLINK_CSS', TL_THEME_CSS_DIR . TL_CSS_MAIN);
 define('TL_PRINT_CSS', TL_THEME_CSS_DIR . TL_CSS_PRINT);
-define('TL_TREEMENU_CSS', TL_THEME_CSS_DIR . TL_CSS_TREEMENU);
 
 // if you do not want to use this, redefine $tlCfg->custom_css as '' or null
 define('TL_TESTLINK_CUSTOM_CSS', TL_THEME_CSS_DIR . $tlCfg->custom_css);

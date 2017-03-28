@@ -22,8 +22,6 @@
  * Note about step info
  * is present in gui->map_last_exec
  *
- * @internal revisions
- * @since 1.9.16
  *
 **/
 require_once('../../config.inc.php');
@@ -412,7 +410,7 @@ else
   $smarty->assign('test_automation_enabled',0);
   $smarty->assign('gui',$gui);
   $smarty->assign('cfg',$cfg);
-  $smarty->assign('users',tlUser::getByIDs($db,$userSet,'id'));
+  $smarty->assign('users',tlUser::getByIDs($db,$userSet));
 
   $smarty->display($templateCfg->template_dir . $templateCfg->default_template);
 } 
@@ -1241,7 +1239,7 @@ function initializeRights(&$dbHandler,&$userObj,$tproject_id,$tplan_id)
     $exec_cfg = config_get('exec_cfg');
     $grants = new stdClass();
     
-    $grants->execute = $userObj->hasRight($dbHandler,"testplan_execute",$tproject_id,$tplan_id);
+    $grants->execute = $userObj->hasRight($dbHandler,"testplan_execute",$tproject_id,$tplan_id,true);
     $grants->execute = $grants->execute=="yes" ? 1 : 0;
     
     // IMPORTANT NOTICE - TICKET 5128
@@ -1260,7 +1258,7 @@ function initializeRights(&$dbHandler,&$userObj,$tproject_id,$tplan_id)
     // These checks can not be done here
     //
     // TICKET 5310: Execution Config - convert options into rights
-    $grants->delete_execution = $userObj->hasRight($dbHandler,"exec_delete",$tproject_id,$tplan_id);
+    $grants->delete_execution = $userObj->hasRight($dbHandler,"exec_delete",$tproject_id,$tplan_id,true);
   
     
     // Important:
@@ -1290,6 +1288,22 @@ function initializeGui(&$dbHandler,&$argsObj,&$cfgObj,&$tplanMgr,&$tcaseMgr,&$is
   $platformMgr = new tlPlatform($dbHandler,$argsObj->tproject_id);
     
   $gui = new stdClass();
+
+  $k2i = array('import','attachments','exec','edit_exec');
+  $gui->features = array();
+  foreach($k2i as $olh)
+  {
+    $gui->features[$olh] = false;
+  }  
+
+  if( $argsObj->user->hasRight($dbHandler,'testplan_execute',
+                      $argsObj->tproject_id,$argsObj->tplan_id,true) )
+  {
+    foreach($k2i as $olh)
+    {
+      $gui->features[$olh] = true;
+    }  
+  }  
 
   // TBD $gui->delAttachmentURL =
   
@@ -1506,10 +1520,11 @@ function processTestCase($tcase,&$guiObj,&$argsObj,&$cfgObj,$tcv,&$treeMgr,&$tca
   
   // IMPORTANT due  to platform feature
   // every element on linked_tcversions will be an array.
-  $cf_filters=array('show_on_execution' => 1); 
-  $locationFilters=$tcaseMgr->buildCFLocationMap();
-  $guiObj->design_time_cfields='';
-  $guiObj->testplan_design_time_cfields='';
+  $cf_filters = array('show_on_execution' => 1); 
+  $locationFilters = $tcaseMgr->buildCFLocationMap();
+  
+  $guiObj->design_time_cfields = array();
+  $guiObj->testplan_design_time_cfields = array();
   
   $tcase_id = isset($tcase['tcase_id']) ? $tcase['tcase_id'] : $argsObj->id;
 
@@ -1527,6 +1542,8 @@ function processTestCase($tcase,&$guiObj,&$argsObj,&$cfgObj,$tcv,&$treeMgr,&$tca
   $tcversion_id = isset($tcase['tcversion_id']) ? $tcase['tcversion_id'] : $items_to_exec[$tcase_id];
     
   $guiObj->tcAttachments[$tcase_id] = getAttachmentInfos($docRepository,$tcase_id,'nodes_hierarchy',1);
+
+
   foreach($locationFilters as $locationKey => $filterValue)
   {
     $finalFilters=$cf_filters+$filterValue;

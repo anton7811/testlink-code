@@ -5,12 +5,10 @@
  *
  * @package     TestLink
  * @author      Francisco Mancardi (francisco.mancardi@gmail.com)
- * @copyright   2005-2016, TestLink community 
+ * @copyright   2005-2017, TestLink community 
  * @filesource  tc_exec_assignment.php
  * @link        http://www.testlink.org
  *
- * @internal revisions
- * @since 1.9.16
  */
          
 require_once(dirname(__FILE__)."/../../config.inc.php");
@@ -26,7 +24,6 @@ $tplan_mgr = new testplan($db);
 $tcase_mgr = new testcase($db); 
 $assignment_mgr = new assignment_mgr($db); 
 
-$templateCfg = templateConfiguration();
 
 $args = init_args();
 $gui = initializeGui($db,$args,$tplan_mgr,$tcase_mgr);
@@ -242,6 +239,8 @@ switch($args->level)
 
     // platform filter is generated inside getFilteredSpecView() using $args->control_panel['setting_platform'];
     // $out = getFilteredSpecView($db, $args, $tplan_mgr, $tcase_mgr, $filters, $opt);
+
+    // var_dump($filters);die();
     $out = getFilteredSpecViewFlat($db, $args, $tplan_mgr, $tcase_mgr, $filters, $opt);
   break;
 
@@ -265,7 +264,8 @@ if ($_SESSION['testprojectOptions']->testPriorityEnabled)
 }
 
 // Changing to _flat template
-$tpl = $templateCfg->template_dir . $templateCfg->default_template;
+$tplCfg = templateConfiguration();
+$tpl = $tplCfg->tpl;
 $tpl = str_replace('.tpl', '_flat.tpl', $tpl);
 
 $smarty = new TLSmarty();
@@ -520,7 +520,6 @@ function send_mail_to_testers(&$dbHandler,&$tcaseMgr,&$guiObj,&$argsObj,$feature
     $flat_path[$tcase_id]=implode('/',$pieces) . '/' . $tcnames[$tcase_id];  
   }
 
-  file_put_contents('/tmp/maillog.log', json_encode($testers));
   foreach($testers as $tester_type => $tester_set)
   {
     if( !is_null($tester_set) )
@@ -563,10 +562,9 @@ function send_mail_to_testers(&$dbHandler,&$tcaseMgr,&$guiObj,&$argsObj,$feature
 
           
         $email['body'] .= '<br />' . date(DATE_RFC1123);
-        
-        file_put_contents('/tmp/tlmail.log',json_encode($email),FILE_APPEND);
         $email_op = email_send($email['from_address'], $email['to_address'], 
-                               $email['subject'], $email['body'], '', true, true);
+                               $email['subject'], $email['body'], null, 
+                               '', true, true);
       } // foreach($tester_set as $user_id => $value)
     }                       
   }
