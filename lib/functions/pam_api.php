@@ -42,7 +42,7 @@ function pam_authenticate( $p_login_name, $p_password )
   $t_pam_script = $authCfg['pam_script_path'];
 
   $return = 1;
-  exec($t_pam_script." ".$p_login_name." ".$p_password, $out, $return);
+  exec($t_pam_script." ".$p_login_name." '".$p_password."'", $out, $return);
   if (!$return) {
     $t_authenticated->status_ok = true;
     $t_authenticated->status_code = 'OK';
