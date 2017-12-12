@@ -19,6 +19,7 @@
 require_once("users.inc.php");
 require_once("roles.inc.php");
 require_once("ldap_api.php");
+require_once("pam_api.php");
 
 /** 
  * authorization function verifies login & password and set user session data 
@@ -79,6 +80,24 @@ function doAuthorize(&$db,$login,$pwd,$options=null)
           $user->emailAddress = $uf->emailAddress;
           $user->firstName = $uf->firstName;
           $user->lastName = $uf->lastName;
+          $doLogin = ($user->writeToDB($db) == tl::OK);
+        }
+      } elseif ($authCfg['pam_automatic_user_creation']) {
+        $user->authentication = 'PAM';  // force for auth_does_password_match
+        $check = auth_does_password_match($user,$pwd);
+
+        if( $check->status_ok )
+        {
+          $user = new tlUser();
+          $user->login = $login;
+          $user->authentication = 'PAM';
+          $user->isActive = true;
+          $user->setPassword($pwd);  // write password on DB anyway
+
+          $user_info = pam_get_user_attributes($login);
+          $user->emailAddress = $user_info['email'];
+          $user->firstName = $user_info['firstName'];
+          $user->lastName = $user_info['lastName'];
           $doLogin = ($user->writeToDB($db) == tl::OK);
         }  
       }  
@@ -217,6 +236,7 @@ function auth_does_password_match(&$userObj,$cleartext_password)
   {
     case 'DB':
     case 'LDAP':
+    case 'PAM':
     break;
 
     default:
@@ -240,6 +260,12 @@ function auth_does_password_match(&$userObj,$cleartext_password)
       $ret->ldap_index = $xx->ldap_index;
     break;
     
+    case 'PAM':
+      $xx = pam_authenticate($userObj->login, $cleartext_password);
+      $ret->status_ok = $xx->status_ok;
+      $ret->msg = $xx->status_verbose;
+    break;
+
     case 'MD5':
     case 'DB':
     default:
