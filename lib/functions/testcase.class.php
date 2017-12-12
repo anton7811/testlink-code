@@ -613,9 +613,10 @@ class testcase extends tlObjectWithAttachments
  private function createVersion($item)
  {
     $debugMsg = 'Class:' . __CLASS__ . ' - Method: ' . __FUNCTION__;
-    $tcase_version_id = $this->tree_manager->new_node($item->id,$this->node_types_descr_id['testcase_version']);
+    $tcase_version_id = $this->tree_manager->new_node($item->id,
+                          $this->node_types_descr_id['testcase_version']);
 
-    $this->CKEditorCopyAndPasteCleanUp($item,array('summary','precondition')); 
+    $this->CKEditorCopyAndPasteCleanUp($item,array('summary','preconditions')); 
 
     $sql = "/* $debugMsg */ INSERT INTO {$this->tables['tcversions']} " .
            " (id,tc_external_id,version,summary,preconditions," .
@@ -683,8 +684,10 @@ class testcase extends tlObjectWithAttachments
           $item->steps[$jdx] = (array)$item->steps[$jdx];
         }
 
-        $op = $this->create_step($tcase_version_id,$item->steps[$jdx]['step_number'],
-                                 $item->steps[$jdx]['actions'],$item->steps[$jdx]['expected_results'],
+        $op = $this->create_step($tcase_version_id,
+                                 $item->steps[$jdx]['step_number'],
+                                 $item->steps[$jdx]['actions'],
+                                 $item->steps[$jdx]['expected_results'],
                                  $item->steps[$jdx]['execution_type']);
       }
     }
@@ -1104,13 +1107,22 @@ class testcase extends tlObjectWithAttachments
       $sql[] = " UPDATE {$this->tables['nodes_hierarchy']} SET name='" .
                $this->db->prepare_string($name) . "' WHERE id= {$id}";
 
+
+      $k2e = array('summary','preconditions');
+      $item = new stdClass();
+      $item->summary = $summary;
+      $item->preconditions = $preconditions;
+      $this->CKEditorCopyAndPasteCleanUp($item,$k2e); 
+      
       $dummy = " UPDATE {$this->tables['tcversions']} " .
-               " SET summary='" . $this->db->prepare_string($summary) . "'," .
+               " SET summary='" . 
+                 $this->db->prepare_string($item->summary) . "'," .
                " updater_id=" . $this->db->prepare_int($user_id) . ", " .
                " modification_ts = " . $this->db->db_now() . "," .
                " execution_type=" . $this->db->prepare_int($execution_type) . ", " .
                " importance=" . $this->db->prepare_int($importance) . "," .
-               " preconditions='" . $this->db->prepare_string($preconditions) . "' ";
+               " preconditions='" . 
+                 $this->db->prepare_string($item->preconditions) . "' ";
 
 
       if( !is_null($attrib['status']) )
@@ -1123,10 +1135,11 @@ class testcase extends tlObjectWithAttachments
         $dummy .= ", is_open=" . intval($attrib['is_open']); 
       }
 	  
-	  if( !is_null($attrib['active']) )    
+	    if( !is_null($attrib['active']) )    
       {
         $dummy .= ", active=" . intval($attrib['active']); 
       }
+
       if( !is_null($attrib['estimatedExecDuration']) )
       {
         $dummy .= ", estimated_exec_duration=";
@@ -1796,7 +1809,8 @@ class testcase extends tlObjectWithAttachments
                     $act = "[ghost]\"Step\":{$step['step_number']}," .
                            '"TestCase"' .':"' . $pfx . '",' .
                            "\"Version\":{$tcversion['version']}[/ghost]";
-                    $op = $this->create_step($to_tcversion_id,$step['step_number'],$act,$act,
+                    $op = $this->create_step($to_tcversion_id,
+                                             $step['step_number'],$act,$act,
                                              $step['execution_type']);
                   }
                 }
@@ -1804,8 +1818,11 @@ class testcase extends tlObjectWithAttachments
                 {
                   foreach($stepsSet as $key => $step)
                   {
-                    $op = $this->create_step($to_tcversion_id,$step['step_number'],$step['actions'],
-                                             $step['expected_results'],$step['execution_type']);
+                    $op = $this->create_step($to_tcversion_id,
+                                             $step['step_number'],
+                                             $step['actions'],
+                                             $step['expected_results'],
+                                             $step['execution_type']);
                   }
                 }
               }
@@ -1996,8 +2013,9 @@ class testcase extends tlObjectWithAttachments
     {
       foreach($stepsSet as $key => $step)
       {
-        $op = $this->create_step($to_tcversion_id,$step['step_number'],$step['actions'],
-                                 $step['expected_results'],$step['execution_type']);
+        $op = $this->create_step($to_tcversion_id,$step['step_number'],
+                                 $step['actions'],$step['expected_results'],
+                                 $step['execution_type']);
       }
     }
   }
@@ -3776,6 +3794,57 @@ class testcase extends tlObjectWithAttachments
         $tc_data[0]['xmlrequirements'] = exportDataToXML($requirements,$reqRootElem,$reqElemTemplate,$reqDecode,true);
       }
     }
+	
+	if (isset($optExport['ATTACHMENTS']) && $optExport['ATTACHMENTS'])
+    {
+		$attachments=null;
+	
+		// get all attachments
+		$attachmentInfos = $this->attachmentRepository->getAttachmentInfosFor($tcase_id,$this->attachmentTableName,'id');
+	  
+		// get all attachments content and encode it in base64	  
+		if ($attachmentInfos)
+		{
+			foreach ($attachmentInfos as $attachmentInfo)
+			{
+				$aID = $attachmentInfo["id"];
+				$content = $this->attachmentRepository->getAttachmentContent($aID, $attachmentInfo);
+				
+				if ($content != null)
+				{
+					$attachments[$aID]["id"] = $aID;
+					$attachments[$aID]["name"] = $attachmentInfo["file_name"];
+					$attachments[$aID]["file_type"] = $attachmentInfo["file_type"];
+					$attachments[$aID]["file_size"] = $attachmentInfo["file_size"];
+					$attachments[$aID]["title"] = $attachmentInfo["title"];
+					$attachments[$aID]["date_added"] = $attachmentInfo["date_added"];
+					$attachments[$aID]["content"] = base64_encode($content);
+				}
+			}
+	    }
+	  
+		if( !is_null($attachments) && count($attachments) > 0 )
+		{
+			$attchRootElem = "\t<attachments>\n{{XMLCODE}}\t</attachments>\n";
+			$attchElemTemplate = "\t\t<attachment>\n" .
+							   "\t\t\t<id><![CDATA[||ATTACHMENT_ID||]]></id>\n" .
+							   "\t\t\t<name><![CDATA[||ATTACHMENT_NAME||]]></name>\n" .
+							   "\t\t\t<file_type><![CDATA[||ATTACHMENT_FILE_TYPE||]]></file_type>\n" .
+							   "\t\t\t<file_size><![CDATA[||ATTACHMENT_FILE_SIZE||]]></file_size>\n" .
+							   "\t\t\t<title><![CDATA[||ATTACHMENT_TITLE||]]></title>\n" .
+							   "\t\t\t<date_added><![CDATA[||ATTACHMENT_DATE_ADDED||]]></date_added>\n" .
+							   "\t\t\t<content><![CDATA[||ATTACHMENT_CONTENT||]]></content>\n" .
+							   "\t\t</attachment>\n";
+
+			$attchDecode = array ("||ATTACHMENT_ID||" => "id", "||ATTACHMENT_NAME||" => "name",
+								"||ATTACHMENT_FILE_TYPE||" => "file_type",
+								"||ATTACHMENT_FILE_SIZE||" => "file_size", 
+								"||ATTACHMENT_TITLE||" => "title",
+								"||ATTACHMENT_DATE_ADDED||" => "date_added", 
+								"||ATTACHMENT_CONTENT||" => "content");
+			$tc_data[0]['xmlattachments'] = exportDataToXML($attachments,$attchRootElem,$attchElemTemplate,$attchDecode,true);
+        }
+    }
 
     // ------------------------------------------------------------------------------------
     if(!isset($optExport['TCSTEPS']) || $optExport['TCSTEPS'])
@@ -3875,7 +3944,7 @@ class testcase extends tlObjectWithAttachments
                 "\t<is_open>||ISOPEN||</is_open>\n" .
                 "\t<active>||ACTIVE||</active>\n" .
                 "||STEPS||\n" .
-                "||KEYWORDS||||CUSTOMFIELDS||||REQUIREMENTS||{$addElemTpl}</testcase>\n";
+                "||KEYWORDS||||CUSTOMFIELDS||||REQUIREMENTS||||ATTACHMENTS||{$addElemTpl}</testcase>\n";
 
 
       // ||yyy||-> tags,  {{xxx}} -> attribute
@@ -3903,6 +3972,7 @@ class testcase extends tlObjectWithAttachments
                     "||KEYWORDS||" => "xmlkeywords",
                     "||CUSTOMFIELDS||" => "xmlcustomfields",
                     "||REQUIREMENTS||" => "xmlrequirements",
+                    "||ATTACHMENTS||" => "xmlattachments",
                     "||RELATIONS||" => "xmlrelations");
 
 
@@ -5310,11 +5380,19 @@ class testcase extends tlObjectWithAttachments
   function update_step($step_id,$step_number,$actions,$expected_results,$execution_type)
   {
     $debugMsg = 'Class:' . __CLASS__ . ' - Method: ' . __FUNCTION__;
-      $ret = array();
+    $ret = array();
+
+    $k2e = array('actions','expected_results');
+    $item = new stdClass();
+    $item->actions = $actions;
+    $item->expected_results = $expected_results;
+    $this->CKEditorCopyAndPasteCleanUp($item,$k2e); 
+
     $sql = "/* $debugMsg */ UPDATE {$this->tables['tcsteps']} " .
            " SET step_number=" . $this->db->prepare_int($step_number) . "," .
-           " actions='" . $this->db->prepare_string($actions) . "', " .
-           " expected_results='" . $this->db->prepare_string($expected_results) . "', " .
+           " actions='" . $this->db->prepare_string($item->actions) . "', " .
+           " expected_results='" . 
+           $this->db->prepare_string($item->expected_results) . "', " .
            " execution_type = " . $this->db->prepare_int($execution_type)  .
            " WHERE id = " . $this->db->prepare_int($step_id);
 
@@ -5322,8 +5400,8 @@ class testcase extends tlObjectWithAttachments
     $ret = array('msg' => 'ok', 'status_ok' => 1, 'sql' => $sql);
     if (!$result)
     {
-          $ret['msg'] = $this->db->error_msg();
-        $ret['status_ok']=0;
+      $ret['msg'] = $this->db->error_msg();
+      $ret['status_ok']=0;
     }
     return $ret;
   }
@@ -5441,10 +5519,10 @@ class testcase extends tlObjectWithAttachments
         $countmain = 1;
 
         // Build custom fields filter
-        // do not worry!! it seems that filter criteria is OR, but really is an AND,
+        // do not worry!! it seems that filter criteria is OR, 
+        // but really is an AND,
         // OR is needed to do a simple query.
         // with processing on recordset becomes an AND
-        // BUGID 3995
         foreach ($cf_hash as $cf_id => $cf_value)
         {
           if ( $countmain != 1 )
@@ -5457,7 +5535,6 @@ class testcase extends tlObjectWithAttachments
 
             foreach ($cf_value as $value)
             {
-
               if ($count > 1)
               {
                 $cfQuery .= " AND ";
@@ -5468,7 +5545,7 @@ class testcase extends tlObjectWithAttachments
           }
           else
           {
-              $cfQuery .=  " ( CFDV.value LIKE '%{$cf_value}%' ) ";
+            $cfQuery .=  " ( CFDV.value LIKE '%{$cf_value}%' AND CFDV.field_id = {$cf_id} )";
           }
           $countmain++;
         }
@@ -5597,20 +5674,20 @@ class testcase extends tlObjectWithAttachments
    * to update whole steps/expected results structure for test case version.
    * This can result in some step removed, other updated and other new created.
    *
-   * @internal Revisions
-   * 20100821 - franciscom - needed to fix import feature (BUGID 3634).
    */
   function update_tcversion_steps($tcversion_id,$steps)
   {
     $debugMsg = 'Class:' . __CLASS__ . ' - Method: ' . __FUNCTION__;
 
     // delete all current steps (if any exists)
-      // Attention:
-      // After addition of test case steps feature, a test case version can be root of
-      // a subtree that contains the steps.
-    // Remember we are using (at least on Postgres FK => we need to delete in a precise order
+    // Attention:
+    // After addition of test case steps feature, a test case version 
+    // can be root of a subtree that contains the steps.
+    // Remember we are using (at least on Postgres FK => we need to delete 
+    // in a precise order.
 
-    $stepSet = $this->get_steps($tcversion_id,0,array('fields2get' => 'id', 'accessKey' => 'id'));
+    $stepSet = $this->get_steps($tcversion_id,0,
+                        array('fields2get' => 'id', 'accessKey' => 'id'));
     if( count($stepSet) > 0 )
     {
       $this->delete_step_by_id(array_keys($stepSet));
@@ -5620,8 +5697,10 @@ class testcase extends tlObjectWithAttachments
     $loop2do = count($steps);
     for($idx=0; $idx < $loop2do; $idx++)
     {
-      $this->create_step($tcversion_id,$steps[$idx]['step_number'],$steps[$idx]['actions'],
-                 $steps[$idx]['expected_results'],$steps[$idx]['execution_type']);
+      $this->create_step($tcversion_id,$steps[$idx]['step_number'],
+                         $steps[$idx]['actions'],
+                         $steps[$idx]['expected_results'],
+                         $steps[$idx]['execution_type']);
     }
   }
 
@@ -6144,15 +6223,40 @@ class testcase extends tlObjectWithAttachments
    *
    *
    */
-  function setExecutionType($tcversionID,$value)
+  function setExecutionType($tcversionID,$value,$opt=null)
   {
     $debugMsg = 'Class:' . __CLASS__ . ' - Method: ' . __FUNCTION__;
-    $execType = intval($value);
+    
+    $my['opt'] = array('updSteps' => false);
+    $my['opt'] = array_merge($my['opt'],(array)$opt);
+
+    $execType = $this->db->prepare_int(intval($value));
+    $safeTCVID = $this->db->prepare_int($tcversionID);
+
     $sql = "/* $debugMsg */ " .
            " UPDATE {$this->tables['tcversions']} " .
-           " SET execution_type=" . $this->db->prepare_int($execType) .
-           " WHERE id = " . $this->db->prepare_int($tcversionID);
+           " SET execution_type={$execType} WHERE id = {$safeTCVID} ";
     $this->db->exec_query($sql);
+
+    if( $my['opt']['updSteps'] )
+    {
+      $opx = array('fields2get' => 'id');
+      $stepIDSet = $this->get_steps($safeTCVID,null,$opx);
+      
+      if( !is_null($stepIDSet) )
+      {
+        $target = array();
+        foreach($stepIDSet as $elem )
+        {
+          $target[] = $elem['id'];
+        }  
+        $inClause = implode(',',$target);
+        $sqlX = " UPDATE {$this->tables['tcsteps']} " .
+                " SET execution_type={$execType} WHERE id IN (" . $inClause . ")";
+        $this->db->exec_query($sqlX);
+      }  
+    }    
+
     return array($value,$execType,$sql);
   }
 
@@ -7342,7 +7446,7 @@ class testcase extends tlObjectWithAttachments
     //
     // CRITIC: skipCheck is needed to render OK when creating report on Pseudo-Word format.
     $bhref = is_null($basehref) ? $_SESSION['basehref'] : $basehref;
-    $img = '<p><img src="' . $bhref . '/lib/attachments/attachmentdownload.php?skipCheck=1&id=%id%"></p>';
+    $img = '<p><img src="' . $bhref . '/lib/attachments/attachmentdownload.php?skipCheck=%sec%&id=%id%"></p>';
 
     $rse = &$item2render;
     foreach($key2check as $item_key)
@@ -7374,7 +7478,8 @@ class testcase extends tlObjectWithAttachments
               {
                 if(isset($attSet[$id][$atx]) && $attSet[$id][$atx]['is_image'])
                 {
-                  $ghost .= str_replace('%id%',$atx,$img);
+                  $sec = hash('sha256', $attSet[$id][$atx]['file_name']);
+                  $ghost .= str_replace(array('%id%','%sec%'),array($atx,$sec),$img);
                 }
                 $lim = $elc-1;
                 for($cpx=1; $cpx <= $lim; $cpx++)
@@ -7633,5 +7738,8 @@ class testcase extends tlObjectWithAttachments
       $items->$fi = str_ireplace($offending,$good,$items->$fi);
     } 
   }
+
+
+
 
 }  // Class end

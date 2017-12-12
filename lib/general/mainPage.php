@@ -13,8 +13,6 @@
  * based upon the login. 
  * There is also some javascript that handles the form information.
  *
- * @internal revisions
- * @since 1.9.15
  *
  **/
 
@@ -91,7 +89,7 @@ if($testplanID > 0)
   	{
      	$found = 1;
      	$index = $idx;
-     	$break;
+     	break;
     }
   }
   if( $found == 0 )
@@ -241,7 +239,6 @@ function getGrants($dbHandler,$user,$forceToNo=false)
   /** redirect admin to create testproject if not found */
   if ($grants['project_edit'] && !isset($_SESSION['testprojectID']))
   {
-	  tLog('No project found: Assume a new installation and redirect to create it','WARNING'); 
 	  redirect($_SESSION['basehref'] . 'lib/project/projectEdit.php?doAction=create');
 	  exit();
   }
