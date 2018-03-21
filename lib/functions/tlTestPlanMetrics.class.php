@@ -1269,7 +1269,7 @@ class tlTestPlanMetrics extends testplan
         $topSuiteID = $tsuite_id;
         $initName = true;
       }     
-      
+
       
       
         if( !isset($renderObj->info[$topSuiteID]) )
@@ -1326,7 +1326,145 @@ class tlTestPlanMetrics extends testplan
 
     return $renderObj;
   }
+  
+  
+  function collectTestSuiteStats($renderObj, $rObj, $upSuiteID, $subSuiteID, $template)
+  {
+    if( !isset($renderObj->info[$upSuiteID]) )
+    {
+      $renderObj->info[$upSuiteID] = $template;
+      $execQty[$upSuiteID] = 0;
+      $initName = true;
+    }  
 
+    if( $initName )
+    {
+      $dummy = $this->tree_manager->get_node_hierarchy_info($upSuiteID);
+      $renderObj->info[$upSuiteID]['name'] = $dummy['name'];
+      unset($dummy);
+    }        
+
+    // Loop to get executions counters
+    foreach($rObj->info[$subSuiteID]['details'] as $code => &$elem)
+    {
+      $renderObj->info[$upSuiteID]['details'][$code]['qty'] += $elem['qty'];    
+      $renderObj->info[$upSuiteID]['total_tc'] += $elem['qty'];
+
+      if(  $code != 'not_run' )
+      {
+        $execQty[$upSuiteID] += $elem['qty'];
+      }
+    }
+  }
+
+
+  /**
+   *
+   * @internal revisions
+   *
+   * @since 1.9.17
+   */
+  function getStatusTotalsBy2LevelTestSuiteForRender($id,$filters=null,$opt=null)
+  {
+    list($rObj,$staircase) = $this->getStatusTotalsByItemForRender($id,'tsuite',$filters,$opt);
+  
+    $key2loop = array_keys($rObj->info);
+    $template = array('type' => 'tsuite', 'name' => '','total_tc' => 0,
+        'level' => true, 'topsuite' => '', 
+        'percentage_completed' => 0, 'details' => array());  
+
+    foreach($this->statusCode as $verbose => $code)
+    {
+      $template['details'][$verbose] = array('qty' => 0, 'percentage' => 0);
+    }
+    
+    $renderObj = new stdClass();
+    $renderObj->colDefinition = $rObj->colDefinition;
+    
+    // collect qty
+    $topNameCache = null;
+    $execQty = null;
+    foreach($key2loop as $tsuite_id)
+    {
+        // (count() == 1) => is a TOP LEVEL SUITE, 
+        // only element contains Root node, is useless for this algorithm
+        // 
+        if( count($staircase[$tsuite_id]) > 1)
+        {
+            // element at position 1 is a TOP LEVEL SUITE
+            $topSuiteID = &$staircase[$tsuite_id][1];
+            $initName = false;
+        } else {
+            $topSuiteID = $tsuite_id;
+            $initName = true;
+        }     
+       
+        $dummy = $this->tree_manager->get_node_hierarchy_info($topSuiteID);
+        $top_ts_name = $dummy['name'];
+
+        // Collect data for TOP LEVEL SUITE and current suite
+        $this->collectTestSuiteStats($renderObj, $rObj, $topSuiteID, $tsuite_id, $template);
+        $renderObj->info[$topSuiteID]['level'] = true;
+        $renderObj->info[$topSuiteID]['topsuite'] = $top_ts_name;
+            
+        if( count($staircase[$tsuite_id]) > 2)
+        {
+            // element at position 1 is a TOP LEVEL SUITE
+            $subSuiteID = &$staircase[$tsuite_id][2];
+            
+            $dummy = $this->tree_manager->get_node_hierarchy_info($subSuiteID);
+            $ts_name = $dummy['name'];
+             
+            $this->collectTestSuiteStats($renderObj, $rObj, $subSuiteID, $tsuite_id, $template);
+            $renderObj->info[$subSuiteID]['level'] = false;
+            $renderObj->info[$subSuiteID]['topsuite'] = $top_ts_name;
+        }
+        elseif( count($staircase[$tsuite_id]) == 2)
+        {
+            // element at position 1 is a TOP LEVEL SUITE
+            $subSuiteID = &$staircase[$tsuite_id][2];
+            
+            $dummy = $this->tree_manager->get_node_hierarchy_info($tsuite_id);
+            $ts_name = $dummy['name'];
+             
+            $this->collectTestSuiteStats($renderObj, $rObj, $tsuite_id, $tsuite_id, $template);
+            $renderObj->info[$tsuite_id]['level'] = false;
+            $renderObj->info[$tsuite_id]['topsuite'] = $top_ts_name;
+        }
+        //echo "$top_ts_name -> $ts_name -> $last_ts_name<br>";
+        
+    }  
+       
+    // Last step: get percentages
+    foreach($renderObj->info as $tsuite_id => &$elem)
+    {
+      if( $execQty[$tsuite_id] > 0 )
+      {
+        $elem['percentage_completed'] = number_format( 100 * ($execQty[$tsuite_id] / $elem['total_tc']),1);
+      }  
+
+      if( $elem['total_tc'] > 0 )
+      {
+        foreach($elem['details'] as $code => &$yumyum)
+        {
+          $yumyum['percentage'] = number_format( 100 * ($yumyum['qty'] / $elem['total_tc']),1);    
+        }
+      }
+    }
+    
+    unset($dummy);
+    unset($ts_name);
+    unset($top_ts_name);
+    unset($topNameCache);
+    unset($rObj);
+    unset($staircase);
+    unset($template);
+    unset($key2loop);
+    unset($execQty);
+
+    return $renderObj;
+  }
+  
   /** 
    *    
    *    

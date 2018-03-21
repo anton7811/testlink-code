@@ -68,7 +68,7 @@ show Test Results by Status
 	<br />
 	{$labels.generated_by_TestLink_on} {$smarty.now|date_format:$gsmarty_timestamp_format}
 {else}
-	<br \>
+	<br />
 	{$gui->warning_msg}
 {/if}
 </div>

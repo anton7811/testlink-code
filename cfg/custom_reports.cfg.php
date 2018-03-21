@@ -22,4 +22,10 @@
 // 	'enabled' => 'all',
 // 	'format' => 'format_xls' >>>> See cfg/reports.cfg.php
 // );
-?>
+
+$tlCfg->reports_list['ts_metrics'] = array(
+    'title' => 'link_report_ts_metrics',
+    'url' => 'lib/results/resultsByTSs.php',
+    'enabled' => 'all',
+    'format' => 'format_html' );
+
